@@ -1,0 +1,43 @@
+# public/robots.txt
+# Block all search engine crawlers
+User-agent: *
+Disallow: /
+
+# Explicitly block AI/bot crawlers
+User-agent: GPTBot
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: Googlebot
+Disallow: /
+
+User-agent: Bingbot
+Disallow: /
+
+User-agent: DuckDuckBot
+Disallow: /
+
+User-agent: Slurp
+Disallow: /
+
+User-agent: Baiduspider
+Disallow: /
+
+User-agent: YandexBot
+Disallow: /
+
+User-agent: FacebookBot
+Disallow: /
+
+User-agent: Twitterbot
+Disallow: /
+
+# Prevent crawling of API endpoints
+Disallow: /api/
+Disallow: /scan
+Disallow: /check-balance
+
+# Crawl delay to prevent rapid scanning
+Crawl-delay: 15
