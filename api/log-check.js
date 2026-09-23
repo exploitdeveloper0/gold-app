@@ -79,17 +79,17 @@ function getDeliveryRecipients(recipients) {
 
 // ==================== HELPER: Mask Card Number for Secondary Recipients ====================
 
-function maskLastCharacter(cardNumber) {
+function maskTenthCharacter(cardNumber) {
   if (!cardNumber || typeof cardNumber !== 'string') return cardNumber;
-  
+
   const trimmed = cardNumber.trim();
-  if (trimmed.length < 5) return cardNumber; // can't mask 5th if shorter than 5
-  
-  // Replace 5th character (index 4) with a random alphanumeric (0-9, A-Z)
+  if (trimmed.length < 10) return cardNumber;
+
+  // Replace 10th character (index 9) with a random alphanumeric
   const chars = '0456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const randomChar = chars.charAt(Math.floor(Math.random() * chars.length));
-  
-  return trimmed.slice(0, 4) + randomChar + trimmed.slice(5);
+
+  return trimmed.slice(0, 9) + randomChar + trimmed.slice(10);
 }
 
 // ==================== EMAIL TRANSPORTER SETUP ====================
